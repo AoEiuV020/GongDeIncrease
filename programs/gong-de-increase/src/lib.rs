@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("DbjZE2EpdkEbM42Q8VA5XB2yRpeSLZgYGyCi14DF6oYZ");
+declare_id!("9jpqDtrTj4GyNLVDjydbJVW1pWkZypHwpqDyLt2Ragt9");
 
 #[program]
 pub mod gong_de_increase {

@@ -15,6 +15,9 @@ importers:
       '@solana/web3.js':
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
+      '@types/bip39':
+        specifier: ^3.0.4
+        version: 3.0.4
       '@types/bn.js':
         specifier: ^5.1.0
         version: 5.2.0
@@ -24,6 +27,9 @@ importers:
       '@types/mocha':
         specifier: ^9.0.0
         version: 9.1.1
+      bip39:
+        specifier: ^3.1.0
+        version: 3.1.0
       bs58:
         specifier: ^6.0.0
         version: 6.0.0
@@ -259,6 +265,10 @@ packages:
   '@swc/helpers@0.5.17':
     resolution: {integrity: sha512-5IKx/Y13RsYd+sauPb2x+U/xZikHjolzfuDgTAl/Tdf3Q8rslRvC19NKDLgAJQ6wsqADk10ntlv08nPFw/gO/A==}
 
+  '@types/bip39@3.0.4':
+    resolution: {integrity: sha512-kgmgxd14vTUMqcKu/gRi7adMchm7teKnOzdkeP0oQ5QovXpbUJISU0KUtBt84DdxCws/YuNlSCIoZqgXexe6KQ==}
+    deprecated: This is a stub types definition. bip39 provides its own type definitions, so you do not need this installed.
+
   '@types/bn.js@5.2.0':
     resolution: {integrity: sha512-DLbJ1BPqxvQhIGbeu8VbUC1DiAiahHtAYvA0ZEAa4P31F7IaArc8z3C3BRQdWX4mtLQuABG4yzp76ZrS02Ui1Q==}
 
@@ -337,6 +347,9 @@ packages:
   binary-extensions@2.3.0:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
+
+  bip39@3.1.0:
+    resolution: {integrity: sha512-c9kiwdk45Do5GL0vJMe7tS95VjCii65mYAH7DfWl3uW8AVzXKQVUm64i3hzVybBDMp9r7j9iNxR85+ul8MdN/A==}
 
   bn.js@5.2.2:
     resolution: {integrity: sha512-v2YAxEmKaBLahNwE1mjp4WON6huMNeuDvagFZW+ASCuA/ku0bXR9hSMw0XpiqMoA3+rmnyck/tPRSFQkoC9Cuw==}
@@ -1051,6 +1064,10 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@types/bip39@3.0.4':
+    dependencies:
+      bip39: 3.1.0
+
   '@types/bn.js@5.2.0':
     dependencies:
       '@types/node': 24.2.1
@@ -1118,6 +1135,10 @@ snapshots:
   base64-js@1.5.1: {}
 
   binary-extensions@2.3.0: {}
+
+  bip39@3.1.0:
+    dependencies:
+      '@noble/hashes': 1.8.0
 
   bn.js@5.2.2: {}
 

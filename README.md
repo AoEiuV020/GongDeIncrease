@@ -61,7 +61,7 @@ solana confirm -v <SIGNATURE>
 ```
 再调用就看不到了， 搞不懂，感觉像是会删除旧区块信息，  
 最好能有图形化的工具查看本地，查看主链的网站也支持查看本地，  
-> https://explorer.solana.com/address/3fENcwxPTHuHAu7jXkdCd7sFrEKkcUxqXwGc6bkwGDCK?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899
+> https://explorer.solana.com/address/BvpjTs88TmXJrFfghPJmo1kEJXdtqXX8SdvW6jv8ng9R?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899
 
 本地钱包换了之后就无法升级原本的程序，  
 删除程序私钥 target/deploy/gong_de_increase-keypair.json 就能创建一个新的程序，  
@@ -95,9 +95,36 @@ solana program close <程序ID> --bypass-warning
 导出部署的so文件，理所当然的关闭后就无法导出了，
 ```
 solana program dump <程序ID> <输出文件路径>
+```
 
 13. 导出私钥，
 钱包使用的都是base58编码，cli使用的是json格式，一一对应的，写了个脚本把json转成私钥，
 ```
 pnpx tsx script/exportPrivateKey.ts
 ```
+
+14. 解析助记词，
+助记词一一对应的是熵，而不是私钥，助记词加密码生成种子，种子生成私钥。私钥常用base58编码，而solana使用的是json格式，  
+写了个脚本输入助记词和密码，打印相关熵/种子/私钥/json，  
+！！！注意直接打印私钥时要小心，切勿泄露，不要使用重要的钱包测试！！！  
+```
+pnpm tsx script/mnemonic.ts
+```
+搞这个开发有点危险，为了方便solana命令行使用，不可避免在本地明文保存, 并且可以被固定的路径找到，把助记词加密对这点没有任何作用，  
+- solana config get 找到config文件，
+- 读取config文件中的keypair_path找到私钥文件，
+- 读取私钥文件内容，得到私钥，就能完全掌握开发者的钱包和程序，
+
+15. 项目内部私钥，
+可以通过alias让solana读取相对路径的config和id，就不担心家目录里的泄露了，
+```
+alias solana='solana -C ./sol/config.yml'
+```
+不过config设置对solana-keygen new无效所以只能先创建后转移过来，
+```
+mv ~/.config/solana/id.json ./sol/id.json
+```
+相应的Anchor.toml中的wallet路径也要改成相对路径，  
+配置后进入本项目之前没有办法知道本项目的私钥存在何处，  
+代价就是相关命令只能在本项目根目录执行才能正确识别钱包，  
+

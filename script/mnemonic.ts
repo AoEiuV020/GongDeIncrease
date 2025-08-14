@@ -27,7 +27,7 @@ async function main() {
     
     // 创建 Solana 密钥对
     // 注意：我们只使用种子的前32字节，因为 Solana 密钥对需要32字节的种子
-    const keypair = Keypair.fromSeed(seed.slice(0, 32));
+    const keypair = Keypair.fromSeed(seed.subarray(0, 32));
     
     // 打印公钥和私钥（Base58格式）
     console.log('\nSolana 公钥 (Base58):', keypair.publicKey.toBase58());

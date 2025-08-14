@@ -1,1 +1,1 @@
-solana-test-validator
+solana-test-validator --reset

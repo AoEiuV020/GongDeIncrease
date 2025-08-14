@@ -95,3 +95,9 @@ solana program close <程序ID> --bypass-warning
 导出部署的so文件，理所当然的关闭后就无法导出了，
 ```
 solana program dump <程序ID> <输出文件路径>
+
+13. 导出私钥，
+钱包使用的都是base58编码，cli使用的是json格式，一一对应的，写了个脚本把json转成私钥，
+```
+pnpx tsx script/exportPrivateKey.ts
+```

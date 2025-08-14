@@ -1,27 +1,32 @@
-import { readFileSync } from "fs";
+import { Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
+import fs from "fs";
+import path from "path";
 import { homedir } from "os";
-import { join } from "path";
-import * as bs58 from "bs58";
 
 // 获取命令行参数或使用默认路径
 const keyPath =
-  process.argv[2] || join(homedir(), ".config", "solana", "id.json");
+  process.argv[2] || path.join(homedir(), ".config", "solana", "id.json");
 
-try {
-  // 读取文件内容
-  const fileContent = readFileSync(keyPath, "utf-8");
-
-  // 解析 JSON 数组
-  const numbers = JSON.parse(fileContent);
-
-  // 转换为Uint8Array
-  const bytes = new Uint8Array(numbers);
-
-  // 转换为 base58
-  const base58String = bs58.default.encode(bytes);
-
-  console.log(base58String);
-} catch (error) {
-  console.error("错误:", error.message);
-  process.exit(1);
+// 从文件读取私钥
+function loadKeypairFromFile(filePath: string): Keypair {
+  const content = fs.readFileSync(filePath, { encoding: "utf-8" });
+  const secretKey = Uint8Array.from(JSON.parse(content));
+  return Keypair.fromSecretKey(secretKey);
 }
+
+// 主函数
+async function main() {
+  try {
+    const keypair = loadKeypairFromFile(keyPath);
+
+    console.log("=== Solana 密钥信息 ===");
+    console.log("公钥 (Public Key):", keypair.publicKey.toBase58());
+    console.log("私钥 (Base58):", bs58.encode(keypair.secretKey));
+  } catch (error) {
+    console.error("错误：", error);
+    console.log("请确保 id.json 文件存在并包含有效的 Solana 私钥");
+  }
+}
+
+main().catch(console.error);

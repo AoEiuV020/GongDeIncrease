@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-gong_de_increase = "GRnb9fxb2GeNnAG2ymTAhjtVZEXXUsV4NoBrbs3GxRUU"
+gong_de_increase = "DbjZE2EpdkEbM42Q8VA5XB2yRpeSLZgYGyCi14DF6oYZ"
 
 [registry]
 url = "https://api.apr.dev"

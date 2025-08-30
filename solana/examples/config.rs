@@ -128,3 +128,8 @@ pub fn initialize_program_config() -> Result<ProgramConfig, Box<dyn std::error::
         keypair,
     })
 }
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}

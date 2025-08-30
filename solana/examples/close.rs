@@ -47,12 +47,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 连接到 Solana 网络
     let client = RpcClient::new_with_commitment(config.rpc_url, CommitmentConfig::confirmed());
 
-    // 计算用户专属的 Counter PDA 地址
-    let (counter_pubkey, _bump_seed) = Pubkey::find_program_address(
-        &[b"counter", config.keypair.pubkey().as_ref()],
+    // 使用与 client.rs 相同的方法计算账户地址
+    let seed = "counter";
+    let counter_pubkey = Pubkey::create_with_seed(
+        &config.keypair.pubkey(),
+        seed,
         &config.program_id,
-    );
-    println!("\n📝 用户专属 Counter PDA 地址: {}", counter_pubkey);
+    )?;
+    println!("\n📝 用户专属 Counter 账户地址: {}", counter_pubkey);
 
     // 检查 Counter 账户是否存在
     let _counter_account = match client.get_account(&counter_pubkey) {

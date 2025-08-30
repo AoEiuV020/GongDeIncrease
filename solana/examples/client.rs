@@ -1,6 +1,6 @@
 // ========================================
-// Solana Counter 智能合约客户端（精简版）
-// 演示如何与精简版 Counter 智能合约进行交互
+// Solana Counter 智能合约客户端（最简版）
+// 直接使用用户钱包地址作为基础创建唯一账户
 // ========================================
 
 use solana_client::rpc_client::RpcClient;
@@ -10,6 +10,7 @@ use solana_sdk::{
     transaction::Transaction,
     signature::Signer,
     pubkey::Pubkey,
+    system_instruction,
 };
 
 // 引用本地配置模块
@@ -36,7 +37,7 @@ fn read_counter_value(account_data: &[u8]) -> u64 {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== Solana Counter 智能合约客户端（精简版）启动 ===");
+    println!("=== Solana Counter 智能合约客户端（最简版）启动 ===");
     
     // 初始化配置
     let config = initialize_program_config()?;
@@ -53,16 +54,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n💰 检查账户余额...");
     let balance = check_and_print_balance(&client, &config.keypair.pubkey(), "当前账户余额")?;
 
-    // 计算用户专属的 Counter 账户地址（使用 PDA 确保唯一性）
-    let (counter_pubkey, _bump_seed) = Pubkey::find_program_address(
-        &[b"counter", config.keypair.pubkey().as_ref()],
+    // 使用 create_account_with_seed 方案，更简单且不需要合约支持
+    let seed = "counter";
+    let counter_pubkey = Pubkey::create_with_seed(
+        &config.keypair.pubkey(),
+        seed,
         &config.program_id,
-    );
+    )?;
     println!("\n📝 用户专属 Counter 账户地址: {}", counter_pubkey);
-    println!("   (基于用户公钥: {})", config.keypair.pubkey());
+    println!("   (基于用户公钥 + 种子: '{}')", seed);
 
     // 检查 Counter 账户是否已存在
-    let counter_exists = match client.get_account(&counter_pubkey) {
+    let mut counter_exists = match client.get_account(&counter_pubkey) {
         Ok(account) => {
             if account.lamports > 0 {
                 let counter_value = read_counter_value(&account.data);
@@ -78,25 +81,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // 如果账户不存在，需要通过合约创建它
+    // 如果账户不存在，使用 create_account_with_seed 创建
     if !counter_exists {
-        println!("\n=== 步骤 1: 初始化 Counter 账户 ===");
+        println!("\n=== 步骤 1: 创建 Counter 账户 ===");
         
-        // 创建初始化指令（这将触发合约为用户创建PDA账户）
-        let init_instruction = Instruction::new_with_bytes(
-            config.program_id,
-            &[INSTRUCTION_INCREMENT], // 第一次调用increment会自动创建账户
-            vec![
-                AccountMeta::new(counter_pubkey, false),
-                AccountMeta::new(config.keypair.pubkey(), true),
-                AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
-            ],
+        // 计算账户所需租金（8字节数据空间）
+        let rent = client.get_minimum_balance_for_rent_exemption(8)?;
+        
+        // 使用 create_account_with_seed 创建账户
+        let create_instruction = system_instruction::create_account_with_seed(
+            &config.keypair.pubkey(), // funding account
+            &counter_pubkey,          // new account
+            &config.keypair.pubkey(), // base account
+            seed,                     // seed
+            rent,                     // lamports
+            8,                        // space
+            &config.program_id,       // owner
         );
 
-        // 发送初始化交易
         let recent_blockhash = client.get_latest_blockhash()?;
         let mut transaction = Transaction::new_with_payer(
-            &[init_instruction], 
+            &[create_instruction], 
             Some(&config.keypair.pubkey())
         );
         transaction.sign(&[&config.keypair], recent_blockhash);
@@ -105,10 +110,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &client,
             &transaction,
             &config.keypair.pubkey(),
-            "Counter 账户初始化"
+            "Counter 账户创建"
         )?;
 
-        println!("✅ Counter 账户初始化成功，初始值: 1");
+        println!("✅ Counter 账户创建成功，初始值: 0");
+        counter_exists = true;
     }
 
     // 增加 Counter 三次
@@ -156,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("\n🎉 === Counter 智能合约演示完成 ===");
     println!("📝 本次演示执行的操作:");
-    println!("   1. ✅ 创建了 Counter 账户");
+    println!("   1. ✅ 创建了用户的 Counter 账户");
     println!("   2. ✅ 执行了 3 次增加操作");
     println!("🎊 所有操作均成功完成！");
     println!("ℹ️  Counter 账户地址: {}", counter_pubkey);

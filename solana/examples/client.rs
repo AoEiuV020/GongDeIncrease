@@ -9,7 +9,7 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     transaction::Transaction,
     signature::{Keypair, Signer},
-    system_instruction,
+    pubkey::Pubkey,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use borsh;
@@ -79,97 +79,80 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ========================================
-    // 第三步：创建 Counter 数据账户
+    // 第三步：获取用户的 Counter PDA 账户地址
     // ========================================
     
-    // 为 counter 数据创建一个新的账户密钥对
-    // 这个账户将存储 counter 的状态数据
-    let counter_keypair = Keypair::new();
-    println!("\n📝 Counter 数据账户地址: {}", counter_keypair.pubkey());
-
-    println!("\n=== 步骤 1: 创建 Counter 数据账户 ===");
-    
-    // 计算存储 CounterAccount 结构所需的空间
-    let account_space = std::mem::size_of::<CounterAccount>();
-    println!("所需存储空间: {} 字节", account_space);
-    
-    // 计算账户租金免除所需的最小余额
-    // Solana 要求账户有足够的余额来免除租金，否则账户可能被删除
-    let rent = client.get_minimum_balance_for_rent_exemption(account_space)?;
-    println!("租金免除所需余额: {} lamports ({:.6} SOL)", rent, rent as f64 / 1_000_000_000.0);
-    
-    // 创建系统指令来创建新账户
-    let create_account_instruction = system_instruction::create_account(
-        &config.keypair.pubkey(),    // 付费者（将支付租金和交易费）
-        &counter_keypair.pubkey(),   // 新账户的地址
-        rent,                        // 转移到新账户的 lamports 数量
-        account_space as u64,        // 账户数据空间大小
-        &config.program_id,          // 账户所有者（我们的智能合约）
+    // 计算用户的 Counter PDA 地址
+    let (counter_pda, _bump_seed) = Pubkey::find_program_address(
+        &[b"counter", config.keypair.pubkey().as_ref()],
+        &config.program_id,
     );
+    println!("\n📝 用户 Counter PDA 地址: {}", counter_pda);
 
-    // 获取最新的区块哈希，这是交易的必需组件
-    let recent_blockhash = client.get_latest_blockhash()?;
-    
-    // 构建交易
-    let mut transaction = Transaction::new_with_payer(
-        &[create_account_instruction],    // 交易中包含的指令
-        Some(&config.keypair.pubkey()),   // 交易费用付费者
-    );
-    
-    // 签名交易（需要付费者和新账户的签名）
-    transaction.sign(&[&config.keypair, &counter_keypair], recent_blockhash);
-
-    // 发送交易并检查余额
-    let _signature = send_transaction_and_check_balance(
-        &client, 
-        &transaction, 
-        &config.keypair.pubkey(), 
-        "Counter 数据账户创建"
-    )?;
+    // 检查 Counter 账户是否已存在
+    let counter_exists = match client.get_account(&counter_pda) {
+        Ok(account) => {
+            if account.lamports > 0 {
+                let counter_data = CounterAccount::try_from_slice(&account.data)?;
+                println!("✅ Counter 账户已存在，当前值: {}", counter_data.count);
+                true
+            } else {
+                false
+            }
+        },
+        Err(_) => {
+            println!("ℹ️  Counter 账户不存在，需要创建");
+            false
+        }
+    };
 
     // ========================================
-    // 第四步：初始化 Counter
+    // 第四步：初始化 Counter（如果不存在）
     // ========================================
     
-    println!("\n=== 步骤 2: 初始化 Counter ===");
-    
-    // 序列化初始化指令数据
-    let init_instruction_data = borsh::to_vec(&CounterInstruction::Initialize)?;
-    
-    // 创建初始化指令
-    let init_instruction = Instruction::new_with_bytes(
-        config.program_id,           // 目标程序ID
-        &init_instruction_data,      // 指令数据
-        vec![
-            // Counter 账户（可写，因为需要修改其数据）
-            AccountMeta::new(counter_keypair.pubkey(), false),
-            // 用户账户（只读，作为初始化的授权者）
-            AccountMeta::new_readonly(config.keypair.pubkey(), true),
-        ],
-    );
+    if !counter_exists {
+        println!("\n=== 步骤 1: 创建并初始化 Counter 账户 ===");
+        
+        // 序列化初始化指令数据
+        let init_instruction_data = borsh::to_vec(&CounterInstruction::Initialize)?;
+        
+        // 创建初始化指令
+        let init_instruction = Instruction::new_with_bytes(
+            config.program_id,           
+            &init_instruction_data,      
+            vec![
+                // Counter PDA 账户（可写，将被创建）
+                AccountMeta::new(counter_pda, false),
+                // 用户账户（可写，签名者，支付租金）
+                AccountMeta::new(config.keypair.pubkey(), true),
+                // 系统程序
+                AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+            ],
+        );
 
-    // 构建并发送初始化交易
-    let recent_blockhash = client.get_latest_blockhash()?;
-    let mut transaction = Transaction::new_with_payer(&[init_instruction], Some(&config.keypair.pubkey()));
-    transaction.sign(&[&config.keypair], recent_blockhash);
+        // 构建并发送初始化交易
+        let recent_blockhash = client.get_latest_blockhash()?;
+        let mut transaction = Transaction::new_with_payer(&[init_instruction], Some(&config.keypair.pubkey()));
+        transaction.sign(&[&config.keypair], recent_blockhash);
 
-    let _signature = send_transaction_and_check_balance(
-        &client,
-        &transaction,
-        &config.keypair.pubkey(),
-        "Counter 初始化"
-    )?;
+        let _signature = send_transaction_and_check_balance(
+            &client,
+            &transaction,
+            &config.keypair.pubkey(),
+            "Counter 创建和初始化"
+        )?;
 
-    // 读取并显示初始化后的 counter 值
-    let counter_account = client.get_account(&counter_keypair.pubkey())?;
-    let counter_data = CounterAccount::try_from_slice(&counter_account.data)?;
-    println!("📊 初始化后 Counter 值: {}", counter_data.count);
+        // 读取并显示初始化后的 counter 值
+        let counter_account = client.get_account(&counter_pda)?;
+        let counter_data = CounterAccount::try_from_slice(&counter_account.data)?;
+        println!("📊 初始化后 Counter 值: {}", counter_data.count);
+    }
 
     // ========================================
-    // 第五步：多次增加 Counter
+    // 第五步：增加 Counter 三次
     // ========================================
     
-    println!("\n=== 步骤 3: 增加 Counter（执行3次演示） ===");
+    println!("\n=== 步骤 2: 增加 Counter（执行3次） ===");
     
     for i in 1..=3 {
         println!("\n🔄 第 {} 次增加操作:", i);
@@ -178,11 +161,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let increment_instruction_data = borsh::to_vec(&CounterInstruction::Increment)?;
         
         // 创建增加指令
-        // 注意：增加操作只需要 Counter 账户，不需要用户签名
         let increment_instruction = Instruction::new_with_bytes(
             config.program_id,
             &increment_instruction_data,
-            vec![AccountMeta::new(counter_keypair.pubkey(), false)], // 只需要 Counter 账户（可写）
+            vec![AccountMeta::new(counter_pda, false)], // 使用 PDA 地址
         );
 
         // 构建并发送增加交易
@@ -198,51 +180,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
 
         // 读取并显示更新后的 counter 值
-        let counter_account = client.get_account(&counter_keypair.pubkey())?;
+        let counter_account = client.get_account(&counter_pda)?;
         let counter_data = CounterAccount::try_from_slice(&counter_account.data)?;
         println!("📊 当前 Counter 值: {}", counter_data.count);
     }
-
     // ========================================
-    // 第六步：重置 Counter
-    // ========================================
-    
-    println!("\n=== 步骤 4: 重置 Counter ===");
-    
-    // 序列化重置指令数据
-    let reset_instruction_data = borsh::to_vec(&CounterInstruction::Reset)?;
-    
-    // 创建重置指令
-    // 注意：重置操作需要用户签名作为授权
-    let reset_instruction = Instruction::new_with_bytes(
-        config.program_id,
-        &reset_instruction_data,
-        vec![
-            // Counter 账户（可写）
-            AccountMeta::new(counter_keypair.pubkey(), false),
-            // 用户账户（只读，但需要签名作为重置授权）
-            AccountMeta::new_readonly(config.keypair.pubkey(), true),
-        ],
-    );
-
-    // 构建并发送重置交易
-    let recent_blockhash = client.get_latest_blockhash()?;
-    let mut transaction = Transaction::new_with_payer(&[reset_instruction], Some(&config.keypair.pubkey()));
-    transaction.sign(&[&config.keypair], recent_blockhash);
-
-    let _signature = send_transaction_and_check_balance(
-        &client,
-        &transaction,
-        &config.keypair.pubkey(),
-        "Counter 重置"
-    )?;
-
-    // ========================================
-    // 第七步：显示最终结果
+    // 第六步：显示最终结果
     // ========================================
     
     // 读取并显示最终的 counter 值
-    let counter_account = client.get_account(&counter_keypair.pubkey())?;
+    let counter_account = client.get_account(&counter_pda)?;
     let counter_data = CounterAccount::try_from_slice(&counter_account.data)?;
     println!("📊 最终 Counter 值: {}", counter_data.count);
     
@@ -256,11 +203,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("\n🎉 === Counter 智能合约演示完成 ===");
     println!("📝 本次演示执行的操作:");
-    println!("   1. ✅ 创建了 Counter 数据账户");
-    println!("   2. ✅ 初始化 Counter 为 0");
-    println!("   3. ✅ 执行了 3 次增加操作（0 → 1 → 2 → 3）");
-    println!("   4. ✅ 重置 Counter 为 0");
+    if !counter_exists {
+        println!("   1. ✅ 创建了用户的 Counter PDA 账户");
+    } else {
+        println!("   1. ✅ 使用现有的 Counter PDA 账户");
+    }
+    println!("   2. ✅ 执行了 3 次增加操作");
     println!("🎊 所有操作均成功完成！");
+    println!("ℹ️  您的 Counter PDA 地址: {}", counter_pda);
+    println!("ℹ️  使用 close.rs 可以关闭账户并回收租金");
     
     Ok(())
 }

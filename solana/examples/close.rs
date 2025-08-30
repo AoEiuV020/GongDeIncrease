@@ -15,12 +15,10 @@ use solana_sdk::{
 mod config;
 use config::initialize_program_config;
 
-// 引用工具函数模块
+// 引用工具函数模块 - 直接使用src中的工具函数和examples中的客户端工具
 mod utils;
-use utils::{check_and_print_balance, send_transaction_and_check_balance, read_gongde_value, get_gongde_account_address, format_sol_balance};
-
-// 指令类型：1=关闭
-const INSTRUCTION_CLOSE: u8 = 1;
+use utils::{check_and_print_balance, send_transaction_and_check_balance, format_sol_balance};
+use gong_de_increase::utils::{read_gongde_value, derive_gongde_account_address, GongDeInstruction};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,14 +34,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = RpcClient::new_with_commitment(config.rpc_url, CommitmentConfig::confirmed());
 
     // 使用与 client.rs 相同的方法计算账户地址
-    let gongde_pubkey = get_gongde_account_address(&config.keypair.pubkey(), &config.program_id)?;
+    let gongde_pubkey = derive_gongde_account_address(&config.keypair.pubkey(), &config.program_id)
+        .map_err(|e| format!("生成账户地址失败: {:?}", e))?;
     println!("\n📝 用户专属 功德 账户地址: {}", gongde_pubkey);
 
     // 检查 功德 账户是否存在
     let _gongde_account = match client.get_account(&gongde_pubkey) {
         Ok(account) => {
             if account.lamports > 0 {
-                let gongde_value = read_gongde_value(&account.data);
+                let gongde_value = read_gongde_value(&account.data)
+                    .map_err(|e| format!("读取功德值失败: {:?}", e))?;
                 println!("✅ 功德 账户存在，当前值: {}", gongde_value);
                 println!("📊 账户余额: {} lamports ({})", 
                          account.lamports, 
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建关闭指令
     let close_instruction = Instruction::new_with_bytes(
         config.program_id,
-        &[INSTRUCTION_CLOSE],
+        &[GongDeInstruction::Close as u8],
         vec![
             // 功德 账户（可写，将被关闭）
             AccountMeta::new(gongde_pubkey, false),

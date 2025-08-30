@@ -14,6 +14,15 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
+// 引入工具模块
+pub mod utils;
+use utils::{
+    read_gongde_value, 
+    write_gongde_value, 
+    validate_account_data_size, 
+    GongDeInstruction,
+};
+
 // 声明这是合约的入口点 - 类似main函数
 entrypoint!(process_instruction);
 
@@ -36,27 +45,22 @@ pub fn process_instruction(
     }
 
     // 📏 检查数据空间是否足够（需要4字节存储u32）
-    // 类比：检查内存是否足够存储数据
-    if gongde_account.data_len() < 4 {
-        return Err(ProgramError::AccountDataTooSmall);
-    }
+    // 类比：检查内存是否够存储数据
+    validate_account_data_size(gongde_account.data_len())?;
 
-    // 🎯 解析"函数名" - 从instruction_data的第一个字节获取指令类型
+    // 🎯 解析"函数名" - 从instruction_data解析指令类型
     // 类比：从消息中解析出要调用的函数名
-    // 0 = increment函数, 1 = close函数
-    let instruction = instruction_data.first().copied().unwrap_or(0);
+    let instruction = GongDeInstruction::from_instruction_data(instruction_data)?;
 
     // 🚦 根据指令类型调用对应的"函数" - 这就是函数分发
     match instruction {
-        0 => {
+        GongDeInstruction::Increment => {
             // 🔢 函数名：increment() - 增加功德
             // 类比：调用 gongde.increment() 方法
             
-            // 📖 读取当前的功德值（从账户数据的前4字节）
+            // 📖 读取当前的功德值（使用工具函数）
             let mut data = gongde_account.data.borrow_mut();
-            let current = u32::from_le_bytes([
-                data[0], data[1], data[2], data[3]
-            ]);
+            let current = read_gongde_value(&data)?;
             
             // ⚠️ 检查是否已达到最大值，如果是则直接结束，不再增加
             if current == u32::MAX {
@@ -67,14 +71,13 @@ pub fn process_instruction(
             // ➕ 执行增加操作
             let new_value = current + 1;
             
-            // 💾 将新值写回账户数据（序列化为字节）
-            let bytes = new_value.to_le_bytes();
-            data[0..4].copy_from_slice(&bytes);
+            // 💾 将新值写回账户数据（使用工具函数）
+            write_gongde_value(&mut data, new_value)?;
             
             // 📢 输出日志（类似printf或console.log）
             msg!("功德: {}", new_value);
         }
-        1 => {
+        GongDeInstruction::Close => {
             // 🗑️ 函数名：close() - 关闭账户并回收租金
             // 类比：调用 gongde.close(user) 方法
             
@@ -100,11 +103,6 @@ pub fn process_instruction(
             data.fill(0);
 
             msg!("功德账户关闭成功，租金已返还");
-        }
-        _ => {
-            // ❌ 未知的函数名 - 返回错误
-            // 类比：调用了不存在的函数
-            return Err(ProgramError::InvalidInstructionData);
         }
     }
 

@@ -15,9 +15,10 @@ use std::env;
 mod config;
 use config::initialize_program_config;
 
-// 引用工具函数模块
+// 引用工具函数模块 - 直接使用src中的工具函数和examples中的客户端工具
 mod utils;
 use utils::{query_gongde_account, print_gongde_info};
+use gong_de_increase::utils::GONGDE_VALUE_SIZE;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -98,8 +99,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 
                 // 账户使用情况
-                let rent_exemption = client.get_minimum_balance_for_rent_exemption(4)?;
-                println!("💾 账户数据大小: 4 字节 (u32)");
+                let rent_exemption = client.get_minimum_balance_for_rent_exemption(GONGDE_VALUE_SIZE)?;
+                println!("💾 账户数据大小: {} 字节 (u32)", GONGDE_VALUE_SIZE);
                 println!("💰 最低租金要求: {:.6} SOL", rent_exemption as f64 / 1_000_000_000.0);
                 
                 if account_balance >= rent_exemption {

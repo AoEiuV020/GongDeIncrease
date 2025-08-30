@@ -18,13 +18,10 @@ use solana_sdk::{
 mod config;
 use config::initialize_program_config;
 
-// 引用工具函数模块
+// 引用工具函数模块 - 直接使用src中的工具函数和examples中的客户端工具
 mod utils;
-use utils::{check_and_print_balance, send_transaction_and_check_balance, print_total_consumption, read_gongde_value, get_gongde_account_address};
-
-// 🎯 定义"函数名"常量 - 类比函数名枚举
-// 这些数字对应合约中的指令类型
-const INSTRUCTION_INCREMENT: u8 = 0;  // 对应合约中的increment函数
+use utils::{check_and_print_balance, send_transaction_and_check_balance, print_total_consumption};
+use gong_de_increase::utils::{read_gongde_value, derive_gongde_account_address, GongDeInstruction, GONGDE_VALUE_SIZE, GONGDE_ACCOUNT_SEED};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -48,16 +45,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 🏗️ 创建专属的数据账户地址
     // 类比：为每个用户创建专属的数据存储空间
     // 使用 create_account_with_seed 方案，更简单且不需要合约支持
-    let gongde_pubkey = get_gongde_account_address(&config.keypair.pubkey(), &config.program_id)?;
+    let gongde_pubkey = derive_gongde_account_address(&config.keypair.pubkey(), &config.program_id)
+        .map_err(|e| format!("生成账户地址失败: {:?}", e))?;
     println!("\n📝 用户专属 功德 账户地址: {}", gongde_pubkey);
-    println!("   (基于用户公钥 + 种子: 'GongDeIncrease' + 程序ID生成)");
+    println!("   (基于用户公钥 + 种子: '{}' + 程序ID生成)", GONGDE_ACCOUNT_SEED);
 
     // 🔍 检查 功德 账户是否已存在
     // 类比：检查对象是否已经被创建
     let mut gongde_exists = match client.get_account(&gongde_pubkey) {
         Ok(account) => {
             if account.lamports > 0 {
-                let gongde_value = read_gongde_value(&account.data);
+                let gongde_value = read_gongde_value(&account.data)
+                    .map_err(|e| format!("读取功德值失败: {:?}", e))?;
                 println!("✅ 功德 账户已存在，当前值: {}", gongde_value);
                 true
             } else {
@@ -75,18 +74,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !gongde_exists {
         println!("\n=== 步骤 1: 创建 功德 账户 ===");
         
-        // 💰 计算账户所需租金（4字节数据空间）
+        // 💰 计算账户所需租金（使用常量而不是硬编码）
         // Solana上存储数据需要支付租金，防止垃圾数据
-        let rent = client.get_minimum_balance_for_rent_exemption(4)?;
+        let rent = client.get_minimum_balance_for_rent_exemption(GONGDE_VALUE_SIZE)?;
         
         // 🏗️ 使用系统程序创建账户（不是调用我们的合约）
         let create_instruction = system_instruction::create_account_with_seed(
             &config.keypair.pubkey(), // 付款账户
             &gongde_pubkey,           // 新账户地址
             &config.keypair.pubkey(), // 基础账户
-            "GongDeIncrease",         // 种子字符串
+            GONGDE_ACCOUNT_SEED,      // 种子字符串（使用常量）
             rent,                     // 租金金额
-            4,                        // 数据空间大小（4字节存u32）
+            GONGDE_VALUE_SIZE as u64, // 数据空间大小（使用常量）
             &config.program_id,       // 账户所有者（我们的合约程序）
         );
 
@@ -123,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // 类比：准备函数调用 gongde.increment()
         let increment_instruction = Instruction::new_with_bytes(
             config.program_id,                              // 🎯 合约地址（类似类名）
-            &[INSTRUCTION_INCREMENT],                       // 📋 "函数名"：0表示increment函数
+            &[GongDeInstruction::Increment as u8],          // 📋 "函数名"：使用枚举值
             vec![AccountMeta::new(gongde_pubkey, false)],   // 📁 "参数"：需要操作的账户
         );
         // 📝 AccountMeta::new(地址, 是否需要签名) 表示一个可写的账户参数
@@ -147,13 +146,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // 📊 读取函数执行结果 - 查看功德的新值
         // 类比：获取函数执行后对象的状态
         let gongde_account = client.get_account(&gongde_pubkey)?;
-        let gongde_value = read_gongde_value(&gongde_account.data);
+        let gongde_value = read_gongde_value(&gongde_account.data)
+            .map_err(|e| format!("读取功德值失败: {:?}", e))?;
         println!("📊 当前 功德 值: {}", gongde_value);
     }
 
     // 📊 显示最终结果和统计信息
     let gongde_account = client.get_account(&gongde_pubkey)?;
-    let final_gongde_value = read_gongde_value(&gongde_account.data);
+    let final_gongde_value = read_gongde_value(&gongde_account.data)
+        .map_err(|e| format!("读取最终功德值失败: {:?}", e))?;
     println!("\n📊 最终 功德 值: {}", final_gongde_value);
     
     // 显示最终余额和总消耗

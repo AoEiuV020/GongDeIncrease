@@ -10,6 +10,12 @@ use solana_sdk::{
     signature::Signature,
 };
 
+// 引入src中的工具函数，避免重复实现
+// 注意：这里需要使用相对路径引用同一crate中的模块
+use gong_de_increase::utils::{
+    GONGDE_VALUE_SIZE,
+};
+
 /// 检查并打印账户余额
 /// 
 /// # 参数
@@ -80,7 +86,8 @@ pub fn format_sol_balance(lamports: u64) -> String {
     format!("{:.6} SOL", sol_balance)
 }
 
-/// 从账户数据中读取功德值
+/// 从账户数据中读取功德值（客户端版本）
+/// 这是对src版本的包装，提供客户端友好的错误处理
 /// 
 /// # 参数
 /// * `account_data` - 账户数据字节数组
@@ -88,17 +95,15 @@ pub fn format_sol_balance(lamports: u64) -> String {
 /// # 返回
 /// * `u32` - 功德值，如果数据不足则返回0
 pub fn read_gongde_value(account_data: &[u8]) -> u32 {
-    if account_data.len() >= 4 {
-        // 将字节数组转换为u32数字（小端序）
-        u32::from_le_bytes([
-            account_data[0], account_data[1], account_data[2], account_data[3]
-        ])
-    } else {
-        0
+    // 使用src中的函数，但提供客户端友好的错误处理
+    match gong_de_increase::utils::read_gongde_value(account_data) {
+        Ok(value) => value,
+        Err(_) => 0, // 客户端版本：数据不足时返回0而不是错误
     }
 }
 
-/// 生成用户的功德账户地址
+/// 生成用户的功德账户地址（客户端版本）
+/// 这是对src版本的包装，提供客户端友好的错误处理
 /// 
 /// # 参数
 /// * `user_pubkey` - 用户公钥
@@ -110,13 +115,9 @@ pub fn get_gongde_account_address(
     user_pubkey: &Pubkey, 
     program_id: &Pubkey
 ) -> Result<Pubkey, Box<dyn std::error::Error>> {
-    let seed = "GongDeIncrease";
-    let gongde_pubkey = Pubkey::create_with_seed(
-        user_pubkey,    // 基础地址（用户公钥）
-        seed,           // 种子字符串
-        program_id,     // 合约程序ID
-    )?;
-    Ok(gongde_pubkey)
+    // 使用src中的函数，转换错误类型
+    gong_de_increase::utils::derive_gongde_account_address(user_pubkey, program_id)
+        .map_err(|e| format!("生成账户地址失败: {:?}", e).into())
 }
 
 /// 查询用户的功德账户信息
@@ -140,7 +141,7 @@ pub fn query_gongde_account(
     // 查询账户信息
     match client.get_account(&gongde_pubkey) {
         Ok(account) => {
-            if account.lamports > 0 && account.data.len() >= 4 {
+            if account.lamports > 0 && account.data.len() >= GONGDE_VALUE_SIZE {
                 let gongde_value = read_gongde_value(&account.data);
                 Ok(Some((gongde_pubkey, gongde_value, account.lamports)))
             } else {

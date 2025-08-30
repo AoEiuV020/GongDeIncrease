@@ -80,6 +80,110 @@ pub fn format_sol_balance(lamports: u64) -> String {
     format!("{:.6} SOL", sol_balance)
 }
 
+/// 从账户数据中读取功德值
+/// 
+/// # 参数
+/// * `account_data` - 账户数据字节数组
+/// 
+/// # 返回
+/// * `u32` - 功德值，如果数据不足则返回0
+pub fn read_gongde_value(account_data: &[u8]) -> u32 {
+    if account_data.len() >= 4 {
+        // 将字节数组转换为u32数字（小端序）
+        u32::from_le_bytes([
+            account_data[0], account_data[1], account_data[2], account_data[3]
+        ])
+    } else {
+        0
+    }
+}
+
+/// 生成用户的功德账户地址
+/// 
+/// # 参数
+/// * `user_pubkey` - 用户公钥
+/// * `program_id` - 程序ID
+/// 
+/// # 返回
+/// * `Result<Pubkey, Box<dyn std::error::Error>>` - 功德账户地址
+pub fn get_gongde_account_address(
+    user_pubkey: &Pubkey, 
+    program_id: &Pubkey
+) -> Result<Pubkey, Box<dyn std::error::Error>> {
+    let seed = "GongDeIncrease";
+    let gongde_pubkey = Pubkey::create_with_seed(
+        user_pubkey,    // 基础地址（用户公钥）
+        seed,           // 种子字符串
+        program_id,     // 合约程序ID
+    )?;
+    Ok(gongde_pubkey)
+}
+
+/// 查询用户的功德账户信息
+/// 
+/// # 参数
+/// * `client` - RPC客户端
+/// * `user_pubkey` - 用户公钥
+/// * `program_id` - 程序ID
+/// 
+/// # 返回
+/// * `Result<Option<(Pubkey, u32, u64)>, Box<dyn std::error::Error>>` - 
+///   返回 Some((账户地址, 功德值, 账户余额)) 如果账户存在，否则返回 None
+pub fn query_gongde_account(
+    client: &RpcClient,
+    user_pubkey: &Pubkey,
+    program_id: &Pubkey,
+) -> Result<Option<(Pubkey, u32, u64)>, Box<dyn std::error::Error>> {
+    // 生成功德账户地址
+    let gongde_pubkey = get_gongde_account_address(user_pubkey, program_id)?;
+    
+    // 查询账户信息
+    match client.get_account(&gongde_pubkey) {
+        Ok(account) => {
+            if account.lamports > 0 && account.data.len() >= 4 {
+                let gongde_value = read_gongde_value(&account.data);
+                Ok(Some((gongde_pubkey, gongde_value, account.lamports)))
+            } else {
+                Ok(None)
+            }
+        },
+        Err(_) => Ok(None)
+    }
+}
+
+/// 格式化并打印功德账户信息
+/// 
+/// # 参数
+/// * `user_pubkey` - 用户公钥
+/// * `gongde_info` - 功德账户信息 (账户地址, 功德值, 账户余额)
+pub fn print_gongde_info(user_pubkey: &Pubkey, gongde_info: Option<(Pubkey, u32, u64)>) {
+    println!("👤 用户地址: {}", user_pubkey);
+    
+    match gongde_info {
+        Some((gongde_pubkey, gongde_value, account_balance)) => {
+            println!("✅ 功德账户已存在");
+            println!("📍 功德账户地址: {}", gongde_pubkey);
+            println!("🙏 当前功德值: {}", gongde_value);
+            println!("💰 账户余额: {}", format_sol_balance(account_balance));
+            
+            // 功德等级判断
+            let level = match gongde_value {
+                0 => "🥉 初心",
+                1..=10 => "🥈 善念",
+                11..=100 => "🥇 善行",
+                101..=1000 => "🏆 德高",
+                1001..=10000 => "💎 圣贤",
+                _ => "🌟 功德圆满"
+            };
+            println!("🏅 功德等级: {}", level);
+        },
+        None => {
+            println!("❌ 功德账户不存在");
+            println!("💡 提示: 可以使用 client.rs 创建功德账户");
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())

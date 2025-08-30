@@ -9,7 +9,6 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     transaction::Transaction,
     signature::Signer,
-    pubkey::Pubkey,
 };
 
 // 引用本地配置模块
@@ -18,20 +17,10 @@ use config::initialize_program_config;
 
 // 引用工具函数模块
 mod utils;
-use utils::{check_and_print_balance, send_transaction_and_check_balance};
+use utils::{check_and_print_balance, send_transaction_and_check_balance, read_gongde_value, get_gongde_account_address, format_sol_balance};
 
 // 指令类型：1=关闭
 const INSTRUCTION_CLOSE: u8 = 1;
-
-fn read_gongde_value(account_data: &[u8]) -> u32 {
-    if account_data.len() >= 4 {
-        u32::from_le_bytes([
-            account_data[0], account_data[1], account_data[2], account_data[3]
-        ])
-    } else {
-        0
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -47,12 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = RpcClient::new_with_commitment(config.rpc_url, CommitmentConfig::confirmed());
 
     // 使用与 client.rs 相同的方法计算账户地址
-    let seed = "GongDeIncrease";
-    let gongde_pubkey = Pubkey::create_with_seed(
-        &config.keypair.pubkey(),
-        seed,
-        &config.program_id,
-    )?;
+    let gongde_pubkey = get_gongde_account_address(&config.keypair.pubkey(), &config.program_id)?;
     println!("\n📝 用户专属 功德 账户地址: {}", gongde_pubkey);
 
     // 检查 功德 账户是否存在
@@ -61,9 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if account.lamports > 0 {
                 let gongde_value = read_gongde_value(&account.data);
                 println!("✅ 功德 账户存在，当前值: {}", gongde_value);
-                println!("📊 账户余额: {} lamports ({:.6} SOL)", 
+                println!("📊 账户余额: {} lamports ({})", 
                          account.lamports, 
-                         account.lamports as f64 / 1_000_000_000.0);
+                         format_sol_balance(account.lamports));
                 account
             } else {
                 println!("❌ 功德 账户已经被关闭");
@@ -112,8 +96,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 计算回收的租金
     let recovered_rent = balance_after.saturating_sub(balance_before);
-    println!("🎉 成功回收租金: {} lamports ({:.6} SOL)", 
-             recovered_rent, recovered_rent as f64 / 1_000_000_000.0);
+    println!("🎉 成功回收租金: {} lamports ({})", 
+             recovered_rent, format_sol_balance(recovered_rent));
 
     // 验证账户已被关闭
     match client.get_account(&gongde_pubkey) {

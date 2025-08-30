@@ -11,7 +11,6 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction},  // 🎯 这是调用合约的"指令"结构
     transaction::Transaction,                 // 📦 交易包装器
     signature::Signer,
-    pubkey::Pubkey,
     system_instruction,
 };
 
@@ -21,24 +20,11 @@ use config::initialize_program_config;
 
 // 引用工具函数模块
 mod utils;
-use utils::{check_and_print_balance, send_transaction_and_check_balance, print_total_consumption};
+use utils::{check_and_print_balance, send_transaction_and_check_balance, print_total_consumption, read_gongde_value, get_gongde_account_address};
 
 // 🎯 定义"函数名"常量 - 类比函数名枚举
 // 这些数字对应合约中的指令类型
 const INSTRUCTION_INCREMENT: u8 = 0;  // 对应合约中的increment函数
-
-// 📖 从账户数据中读取功德值的辅助函数
-// 类比：从对象中读取属性值
-fn read_gongde_value(account_data: &[u8]) -> u32 {
-    if account_data.len() >= 4 {
-        // 将字节数组转换为u32数字（小端序）
-        u32::from_le_bytes([
-            account_data[0], account_data[1], account_data[2], account_data[3]
-        ])
-    } else {
-        0
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,14 +48,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 🏗️ 创建专属的数据账户地址
     // 类比：为每个用户创建专属的数据存储空间
     // 使用 create_account_with_seed 方案，更简单且不需要合约支持
-    let seed = "GongDeIncrease";
-    let gongde_pubkey = Pubkey::create_with_seed(
-        &config.keypair.pubkey(),  // 基础地址（用户公钥）
-        seed,                      // 种子字符串
-        &config.program_id,        // 合约程序ID
-    )?;
+    let gongde_pubkey = get_gongde_account_address(&config.keypair.pubkey(), &config.program_id)?;
     println!("\n📝 用户专属 功德 账户地址: {}", gongde_pubkey);
-    println!("   (基于用户公钥 + 种子: '{}' + 程序ID生成)", seed);
+    println!("   (基于用户公钥 + 种子: 'GongDeIncrease' + 程序ID生成)");
 
     // 🔍 检查 功德 账户是否已存在
     // 类比：检查对象是否已经被创建
@@ -103,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &config.keypair.pubkey(), // 付款账户
             &gongde_pubkey,           // 新账户地址
             &config.keypair.pubkey(), // 基础账户
-            seed,                     // 种子字符串
+            "GongDeIncrease",         // 种子字符串
             rent,                     // 租金金额
             4,                        // 数据空间大小（4字节存u32）
             &config.program_id,       // 账户所有者（我们的合约程序）

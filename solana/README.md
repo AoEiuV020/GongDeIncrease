@@ -86,8 +86,34 @@ cargo test -- --no-capture
 
 ### 运行示例
 
+#### 创建和增加功德
 ```bash
 cargo run --example client
+```
+
+#### 查询单个用户功德
+```bash
+cargo run --example query <用户公钥>
+```
+
+示例：
+```bash
+cargo run --example query BvpjTs88TmXJrFfghPJmo1kEJXdtqXX8SdvW6jv8ng9R
+```
+
+#### 批量查询多个用户功德
+```bash
+cargo run --example batch_query <用户公钥1> <用户公钥2> ...
+```
+
+示例：
+```bash
+cargo run --example batch_query BvpjTs88TmXJrFfghPJmo1kEJXdtqXX8SdvW6jv8ng9R 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM
+```
+
+#### 关闭功德账户并回收租金
+```bash
+cargo run --example close
 ```
 
 ### 关闭程序
@@ -179,3 +205,18 @@ counter账户从8字节调整到4字节，租金从 0.00094656 SOL 降到 0.0009
 ```bash
 solana rent 4
 ```
+
+### PDA账户数据安全
+
+创建PDA账户时要指定合约程序ID，后续所有对该账户的操作都必须由该合约程序发起，这样可以确保账户数据的安全性和一致性。  
+```rust
+    let gongde_pubkey = Pubkey::create_with_seed(
+        &config.keypair.pubkey(),  // 基础地址（用户公钥）
+        seed,                      // 种子字符串
+        &config.program_id,        // 合约程序ID
+    )?;
+```
+
+### 查询别人的功德
+
+PDA账户只需要用户公钥+程序ID+种子字符串就能计算出来，不需要私钥。所以可以随便查询任何人的功德。  

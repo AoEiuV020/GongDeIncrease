@@ -35,9 +35,9 @@ pub fn process_instruction(
         return Err(ProgramError::InvalidAccountData);
     }
 
-    // 📏 检查数据空间是否足够（需要8字节存储u64）
+    // 📏 检查数据空间是否足够（需要4字节存储u32）
     // 类比：检查内存是否足够存储数据
-    if counter_account.data_len() < 8 {
+    if counter_account.data_len() < 4 {
         return Err(ProgramError::AccountDataTooSmall);
     }
 
@@ -52,19 +52,24 @@ pub fn process_instruction(
             // 🔢 函数名：increment() - 增加计数器
             // 类比：调用 counter.increment() 方法
             
-            // 📖 读取当前的counter值（从账户数据的前8字节）
+            // 📖 读取当前的counter值（从账户数据的前4字节）
             let mut data = counter_account.data.borrow_mut();
-            let current = u64::from_le_bytes([
-                data[0], data[1], data[2], data[3], 
-                data[4], data[5], data[6], data[7]
+            let current = u32::from_le_bytes([
+                data[0], data[1], data[2], data[3]
             ]);
             
-            // ➕ 执行增加操作（防止溢出）
-            let new_value = current.saturating_add(1);
+            // ⚠️ 检查是否已达到最大值，如果是则直接结束，不再增加
+            if current == u32::MAX {
+                msg!("Counter已达到最大值 {}，不再增加", current);
+                return Ok(());
+            }
+            
+            // ➕ 执行增加操作
+            let new_value = current + 1;
             
             // 💾 将新值写回账户数据（序列化为字节）
             let bytes = new_value.to_le_bytes();
-            data[0..8].copy_from_slice(&bytes);
+            data[0..4].copy_from_slice(&bytes);
             
             // 📢 输出日志（类似printf或console.log）
             msg!("Counter: {}", new_value);
@@ -114,7 +119,7 @@ pub fn process_instruction(
 // 
 // 1. increment() - 指令码0
 //    - 输入：一个可写的counter账户
-//    - 功能：将账户中的u64值+1
+//    - 功能：将账户中的u32值+1（如果未达到最大值）
 //    - 输出：更新后的值（通过日志）
 // 
 // 2. close() - 指令码1  

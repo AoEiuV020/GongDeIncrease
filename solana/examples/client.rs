@@ -29,12 +29,11 @@ const INSTRUCTION_INCREMENT: u8 = 0;  // 对应合约中的increment函数
 
 // 📖 从账户数据中读取counter值的辅助函数
 // 类比：从对象中读取属性值
-fn read_counter_value(account_data: &[u8]) -> u64 {
-    if account_data.len() >= 8 {
-        // 将字节数组转换为u64数字（小端序）
-        u64::from_le_bytes([
-            account_data[0], account_data[1], account_data[2], account_data[3],
-            account_data[4], account_data[5], account_data[6], account_data[7]
+fn read_counter_value(account_data: &[u8]) -> u32 {
+    if account_data.len() >= 4 {
+        // 将字节数组转换为u32数字（小端序）
+        u32::from_le_bytes([
+            account_data[0], account_data[1], account_data[2], account_data[3]
         ])
     } else {
         0
@@ -95,9 +94,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !counter_exists {
         println!("\n=== 步骤 1: 创建 Counter 账户 ===");
         
-        // 💰 计算账户所需租金（8字节数据空间）
+        // 💰 计算账户所需租金（4字节数据空间）
         // Solana上存储数据需要支付租金，防止垃圾数据
-        let rent = client.get_minimum_balance_for_rent_exemption(8)?;
+        let rent = client.get_minimum_balance_for_rent_exemption(4)?;
         
         // 🏗️ 使用系统程序创建账户（不是调用我们的合约）
         let create_instruction = system_instruction::create_account_with_seed(
@@ -106,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &config.keypair.pubkey(), // 基础账户
             seed,                     // 种子字符串
             rent,                     // 租金金额
-            8,                        // 数据空间大小（8字节存u64）
+            4,                        // 数据空间大小（4字节存u32）
             &config.program_id,       // 账户所有者（我们的合约程序）
         );
 

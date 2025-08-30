@@ -11,7 +11,9 @@ use solana_program::{
     entrypoint::ProgramResult, 
     msg, 
     program_error::ProgramError,
+    program::{invoke},
     pubkey::Pubkey,
+    system_instruction,
 };
 
 // 引入工具模块
@@ -21,6 +23,7 @@ use utils::{
     write_gongde_value, 
     validate_account_data_size, 
     GongDeInstruction,
+    get_creator_address,
 };
 
 // 声明这是合约的入口点 - 类似main函数
@@ -55,8 +58,7 @@ pub fn process_instruction(
     // 🚦 根据指令类型调用对应的"函数" - 这就是函数分发
     match instruction {
         GongDeInstruction::Increment => {
-            // 🔢 函数名：increment() - 增加功德
-            // 类比：调用 gongde.increment() 方法
+            // 🔢 函数名：increment() - 增加功德并支付创作者手续费
             
             // 📖 读取当前的功德值（使用工具函数）
             let mut data = gongde_account.data.borrow_mut();
@@ -68,17 +70,63 @@ pub fn process_instruction(
                 return Ok(());
             }
             
+            // 💰 创作者手续费功能 - 强制收取，不能跳过
+            let creator_address = get_creator_address()?;
+            let fee_amount = 5000u64; // 手续费：5000 lamports（约0.000005 SOL）
+            
+            // 必须提供足够的账户（用户账户、创作者账户和系统程序）
+            if accounts.len() < 4 {
+                return Err(ProgramError::NotEnoughAccountKeys);
+            }
+            
+            let user_account = next_account_info(accounts_iter)?; // 用户账户（支付手续费）
+            let creator_account = next_account_info(accounts_iter)?; // 创作者账户（接收手续费）
+            let system_program = next_account_info(accounts_iter)?; // 系统程序
+            
+            // 验证创作者账户地址必须正确
+            if creator_account.key != &creator_address {
+                return Err(ProgramError::InvalidAccountData);
+            }
+            
+            // 验证系统程序
+            if system_program.key != &solana_program::system_program::id() {
+                return Err(ProgramError::IncorrectProgramId);
+            }
+            
+            // 用户账户必须有足够余额支付手续费
+            if user_account.lamports() < fee_amount {
+                return Err(ProgramError::InsufficientFunds);
+            }
+            
+            // 使用系统程序进行转账
+            let transfer_instruction = system_instruction::transfer(
+                user_account.key,
+                creator_account.key,
+                fee_amount,
+            );
+            
+            invoke(
+                &transfer_instruction,
+                &[
+                    user_account.clone(),
+                    creator_account.clone(),
+                    system_program.clone(),
+                ],
+            )?;
+            
+            msg!("用户支付创作者手续费: {} lamports 给 {}", fee_amount, creator_address);
+            
             // ➕ 执行增加操作
             let new_value = current + 1;
             
             // 💾 将新值写回账户数据（使用工具函数）
             write_gongde_value(&mut data, new_value)?;
             
-            // 📢 输出日志（类似printf或console.log）
+            // 📢 输出日志
             msg!("功德: {}", new_value);
         }
         GongDeInstruction::Close => {
-            // 🗑️ 函数名：close() - 关闭账户并回收租金
+            // ️ 函数名：close() - 关闭账户并回收租金
             // 类比：调用 gongde.close(user) 方法
             
             // 👤 获取第二个账户参数（用户账户，接收退款）

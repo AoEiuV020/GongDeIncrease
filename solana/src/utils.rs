@@ -17,6 +17,10 @@ pub const GONGDE_VALUE_SIZE: usize = 4;
 /// 功德账户种子字符串
 pub const GONGDE_ACCOUNT_SEED: &str = "GongDeIncrease";
 
+/// 创作者地址 - 接收手续费的硬编码地址
+/// 这里使用一个示例地址，实际部署时请替换为你的真实地址
+pub const CREATOR_ADDRESS: &str = "GTg2mWYN3jsqv7P2KejMWFY9zpCxrq7ivxGaeteZdQ72";
+
 // ========================================
 // 序列化反序列化工具函数
 // ========================================
@@ -103,6 +107,17 @@ pub fn derive_gongde_account_address(
         GONGDE_ACCOUNT_SEED,   // 种子字符串
         program_id,            // 合约程序ID
     ).map_err(|_| ProgramError::InvalidSeeds)
+}
+
+/// 获取创作者地址
+/// 
+/// # 返回
+/// * `Result<Pubkey, ProgramError>` - 创作者地址
+/// 
+/// # 错误
+/// * `ProgramError::InvalidAccountData` - 如果地址字符串无效
+pub fn get_creator_address() -> Result<Pubkey, ProgramError> {
+    CREATOR_ADDRESS.parse().map_err(|_| ProgramError::InvalidAccountData)
 }
 
 // ========================================

@@ -21,7 +21,7 @@ use config::initialize_program_config;
 // 引用工具函数模块 - 直接使用src中的工具函数和examples中的客户端工具
 mod utils;
 use utils::{check_and_print_balance, send_transaction_and_check_balance, print_total_consumption};
-use gong_de_increase::utils::{read_gongde_value, derive_gongde_account_address, GongDeInstruction, GONGDE_VALUE_SIZE, GONGDE_ACCOUNT_SEED};
+use gong_de_increase::utils::{read_gongde_value, derive_gongde_account_address, GongDeInstruction, GONGDE_VALUE_SIZE, GONGDE_ACCOUNT_SEED, get_creator_address};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -120,10 +120,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         // 📝 创建调用指令 - 这就是"函数调用"的核心
         // 类比：准备函数调用 gongde.increment()
+        let creator_address = get_creator_address()
+            .map_err(|e| format!("获取创作者地址失败: {:?}", e))?;
+        
+        println!("创作者地址: {}", creator_address);
+        
         let increment_instruction = Instruction::new_with_bytes(
             config.program_id,                              // 🎯 合约地址（类似类名）
             &[GongDeInstruction::Increment as u8],          // 📋 "函数名"：使用枚举值
-            vec![AccountMeta::new(gongde_pubkey, false)],   // 📁 "参数"：需要操作的账户
+            vec![
+                AccountMeta::new(gongde_pubkey, false),     // 📁 "参数1"：功德账户（可写）
+                AccountMeta::new(config.keypair.pubkey(), true), // 📁 "参数2"：用户账户（可写，支付手续费，需要签名）
+                AccountMeta::new(creator_address, false),   // 📁 "参数3"：创作者账户（可写，接收手续费）
+                AccountMeta::new_readonly(solana_sdk::system_program::id(), false), // 📁 "参数4"：系统程序（只读）
+            ],
         );
         // 📝 AccountMeta::new(地址, 是否需要签名) 表示一个可写的账户参数
 

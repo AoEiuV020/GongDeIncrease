@@ -11,7 +11,7 @@ use std::str::FromStr;
 #[tokio::main]
 async fn main() {
     // Program ID (replace with your actual program ID)
-    let program_id = Pubkey::from_str("8vn6NyzFB9FyhGS5UizkjgPMQ7mCTXfDt8xz24Q9jrfV").unwrap();
+    let program_id = Pubkey::from_str("FUiBJMmU3Si9gEqEPkJEHSqdZnox5Lo11AqioNReCQPr").unwrap();
 
     // Connect to the Solana devnet
     let rpc_url = String::from("http://localhost:8899");

@@ -24,20 +24,20 @@ pub fn process_instruction(
     accounts: &[AccountInfo],   // 📁 函数需要操作的数据账户（类似函数参数中的对象引用）
     instruction_data: &[u8],   // 📋 调用指令和参数数据（类似函数名+参数的编码）
 ) -> ProgramResult {
-    // 📥 从传入的账户列表中获取第一个账户（counter数据账户）
+    // 📥 从传入的账户列表中获取第一个账户（功德数据账户）
     // 类比：这就像从函数参数中取出第一个对象
     let accounts_iter = &mut accounts.iter();
-    let counter_account = next_account_info(accounts_iter)?;
+    let gongde_account = next_account_info(accounts_iter)?;
 
     // 🔒 安全检查：确保账户可以被修改
     // 类比：检查对象是否有写权限
-    if !counter_account.is_writable {
+    if !gongde_account.is_writable {
         return Err(ProgramError::InvalidAccountData);
     }
 
     // 📏 检查数据空间是否足够（需要4字节存储u32）
     // 类比：检查内存是否足够存储数据
-    if counter_account.data_len() < 4 {
+    if gongde_account.data_len() < 4 {
         return Err(ProgramError::AccountDataTooSmall);
     }
 
@@ -49,18 +49,18 @@ pub fn process_instruction(
     // 🚦 根据指令类型调用对应的"函数" - 这就是函数分发
     match instruction {
         0 => {
-            // 🔢 函数名：increment() - 增加计数器
-            // 类比：调用 counter.increment() 方法
+            // 🔢 函数名：increment() - 增加功德
+            // 类比：调用 gongde.increment() 方法
             
-            // 📖 读取当前的counter值（从账户数据的前4字节）
-            let mut data = counter_account.data.borrow_mut();
+            // 📖 读取当前的功德值（从账户数据的前4字节）
+            let mut data = gongde_account.data.borrow_mut();
             let current = u32::from_le_bytes([
                 data[0], data[1], data[2], data[3]
             ]);
             
             // ⚠️ 检查是否已达到最大值，如果是则直接结束，不再增加
             if current == u32::MAX {
-                msg!("Counter已达到最大值 {}，不再增加", current);
+                msg!("功德圆满");
                 return Ok(());
             }
             
@@ -72,11 +72,11 @@ pub fn process_instruction(
             data[0..4].copy_from_slice(&bytes);
             
             // 📢 输出日志（类似printf或console.log）
-            msg!("Counter: {}", new_value);
+            msg!("功德: {}", new_value);
         }
         1 => {
             // 🗑️ 函数名：close() - 关闭账户并回收租金
-            // 类比：调用 counter.close(user) 方法
+            // 类比：调用 gongde.close(user) 方法
             
             // 👤 获取第二个账户参数（用户账户，接收退款）
             let user = next_account_info(accounts_iter)?;
@@ -87,19 +87,19 @@ pub fn process_instruction(
                 return Err(ProgramError::MissingRequiredSignature);
             }
 
-            // 💰 将counter账户的所有租金转移给用户
+            // 💰 将功德账户的所有租金转移给用户
             // 类比：退还押金给用户
             let dest_starting_lamports = user.lamports();
             **user.lamports.borrow_mut() = dest_starting_lamports
-                .checked_add(counter_account.lamports())
+                .checked_add(gongde_account.lamports())
                 .ok_or(ProgramError::ArithmeticOverflow)?;
-            **counter_account.lamports.borrow_mut() = 0;
+            **gongde_account.lamports.borrow_mut() = 0;
 
             // 🧹 清空账户数据（相当于删除对象）
-            let mut data = counter_account.data.borrow_mut();
+            let mut data = gongde_account.data.borrow_mut();
             data.fill(0);
 
-            msg!("Counter 账户关闭成功，租金已返还");
+            msg!("功德账户关闭成功，租金已返还");
         }
         _ => {
             // ❌ 未知的函数名 - 返回错误
@@ -118,13 +118,13 @@ pub fn process_instruction(
 // 🎯 这个合约实现了两个"函数"：
 // 
 // 1. increment() - 指令码0
-//    - 输入：一个可写的counter账户
+//    - 输入：一个可写的功德账户
 //    - 功能：将账户中的u32值+1（如果未达到最大值）
 //    - 输出：更新后的值（通过日志）
 // 
 // 2. close() - 指令码1  
-//    - 输入：counter账户 + 用户账户
-//    - 功能：删除counter账户，退还租金给用户
+//    - 输入：功德账户 + 用户账户
+//    - 功能：删除功德账户，退还租金给用户
 //    - 输出：成功消息
 // 
 // 🔑 核心设计特点：

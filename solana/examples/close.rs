@@ -1,6 +1,6 @@
 // ========================================
 // 关闭账户并回收租金（精简版）
-// 用于关闭 Counter 账户并回收租金
+// 用于关闭 功德 账户并回收租金
 // ========================================
 
 use solana_client::rpc_client::RpcClient;
@@ -23,11 +23,10 @@ use utils::{check_and_print_balance, send_transaction_and_check_balance};
 // 指令类型：1=关闭
 const INSTRUCTION_CLOSE: u8 = 1;
 
-fn read_counter_value(account_data: &[u8]) -> u64 {
-    if account_data.len() >= 8 {
-        u64::from_le_bytes([
-            account_data[0], account_data[1], account_data[2], account_data[3],
-            account_data[4], account_data[5], account_data[6], account_data[7]
+fn read_gongde_value(account_data: &[u8]) -> u32 {
+    if account_data.len() >= 4 {
+        u32::from_le_bytes([
+            account_data[0], account_data[1], account_data[2], account_data[3]
         ])
     } else {
         0
@@ -36,7 +35,7 @@ fn read_counter_value(account_data: &[u8]) -> u64 {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== 关闭 Counter 账户并回收租金（精简版）===");
+    println!("=== 关闭 功德 账户并回收租金（精简版）===");
     
     // 初始化配置
     let config = initialize_program_config()?;
@@ -48,31 +47,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = RpcClient::new_with_commitment(config.rpc_url, CommitmentConfig::confirmed());
 
     // 使用与 client.rs 相同的方法计算账户地址
-    let seed = "counter";
-    let counter_pubkey = Pubkey::create_with_seed(
+    let seed = "GongDeIncrease";
+    let gongde_pubkey = Pubkey::create_with_seed(
         &config.keypair.pubkey(),
         seed,
         &config.program_id,
     )?;
-    println!("\n📝 用户专属 Counter 账户地址: {}", counter_pubkey);
+    println!("\n📝 用户专属 功德 账户地址: {}", gongde_pubkey);
 
-    // 检查 Counter 账户是否存在
-    let _counter_account = match client.get_account(&counter_pubkey) {
+    // 检查 功德 账户是否存在
+    let _gongde_account = match client.get_account(&gongde_pubkey) {
         Ok(account) => {
             if account.lamports > 0 {
-                let counter_value = read_counter_value(&account.data);
-                println!("✅ Counter 账户存在，当前值: {}", counter_value);
+                let gongde_value = read_gongde_value(&account.data);
+                println!("✅ 功德 账户存在，当前值: {}", gongde_value);
                 println!("📊 账户余额: {} lamports ({:.6} SOL)", 
                          account.lamports, 
                          account.lamports as f64 / 1_000_000_000.0);
                 account
             } else {
-                println!("❌ Counter 账户已经被关闭");
+                println!("❌ 功德 账户已经被关闭");
                 return Ok(());
             }
         },
         Err(_) => {
-            println!("❌ Counter 账户不存在，无需关闭");
+            println!("❌ 功德 账户不存在，无需关闭");
             return Ok(());
         }
     };
@@ -89,8 +88,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.program_id,
         &[INSTRUCTION_CLOSE],
         vec![
-            // Counter 账户（可写，将被关闭）
-            AccountMeta::new(counter_pubkey, false),
+            // 功德 账户（可写，将被关闭）
+            AccountMeta::new(gongde_pubkey, false),
             // 用户账户（可写，接收租金，签名者）
             AccountMeta::new(config.keypair.pubkey(), true),
         ],
@@ -105,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client,
         &transaction,
         &config.keypair.pubkey(),
-        "关闭 Counter 账户"
+        "关闭 功德 账户"
     )?;
 
     // 检查关闭后的余额
@@ -117,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
              recovered_rent, recovered_rent as f64 / 1_000_000_000.0);
 
     // 验证账户已被关闭
-    match client.get_account(&counter_pubkey) {
+    match client.get_account(&gongde_pubkey) {
         Ok(account) => {
             if account.lamports == 0 {
                 println!("✅ 确认：账户已成功关闭");

@@ -129,6 +129,34 @@ pub fn initialize_program_config() -> Result<ProgramConfig, Box<dyn std::error::
     })
 }
 
+/// 初始化程序配置（支持自定义私钥文件）
+/// 如果提供了 keypair_file_path，则使用指定的私钥文件；否则从CLI配置读取
+pub fn initialize_program_config_with_keypair(keypair_file_path: Option<&str>) -> Result<ProgramConfig, Box<dyn std::error::Error>> {
+    // 1. 读取Solana CLI配置
+    let cli_config = load_solana_cli_config()?;
+    
+    // 2. 加载程序ID
+    let program_id = load_program_id()?;
+    
+    // 3. 加载用户私钥 - 使用提供的路径或默认路径
+    let keypair = match keypair_file_path {
+        Some(custom_path) => {
+            println!("使用指定的私钥文件: {}", custom_path);
+            load_keypair_from_file(custom_path)?
+        },
+        None => {
+            println!("使用CLI配置中的私钥文件: {}", cli_config.keypair_path);
+            load_keypair_from_file(&cli_config.keypair_path)?
+        }
+    };
+    
+    Ok(ProgramConfig {
+        program_id,
+        rpc_url: cli_config.json_rpc_url,
+        keypair,
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())

@@ -17,9 +17,12 @@ pub const GONGDE_VALUE_SIZE: usize = 4;
 /// 功德账户种子字符串
 pub const GONGDE_ACCOUNT_SEED: &str = "GongDeIncrease";
 
+/// 全局功德账户种子字符串
+pub const GLOBAL_GONGDE_ACCOUNT_SEED: &str = "GlobalGongDeIncrease";
+
 /// 创作者地址 - 接收手续费的硬编码地址
 /// 这里使用一个示例地址，实际部署时请替换为你的真实地址
-pub const CREATOR_ADDRESS: &str = "GTg2mWYN3jsqv7P2KejMWFY9zpCxrq7ivxGaeteZdQ72";
+pub const CREATOR_ADDRESS: &str = "BvpjTs88TmXJrFfghPJmo1kEJXdtqXX8SdvW6jv8ng9R";
 
 // ========================================
 // 序列化反序列化工具函数
@@ -107,6 +110,27 @@ pub fn derive_gongde_account_address(
         GONGDE_ACCOUNT_SEED,   // 种子字符串
         program_id,            // 合约程序ID
     ).map_err(|_| ProgramError::InvalidSeeds)
+}
+
+/// 生成全局功德PDA账户地址
+/// 这是一个真正的全局账户，绑定到程序ID，不依赖于任何用户
+/// 
+/// # 参数
+/// * `program_id` - 程序ID
+/// 
+/// # 返回
+/// * `Result<(Pubkey, u8), ProgramError>` - (PDA地址, bump种子)
+/// 
+/// # 错误
+/// * `ProgramError::InvalidSeeds` - 如果种子无效
+pub fn derive_global_gongde_pda_address(
+    program_id: &Pubkey
+) -> Result<(Pubkey, u8), ProgramError> {
+    let (pda, bump) = Pubkey::find_program_address(
+        &[GLOBAL_GONGDE_ACCOUNT_SEED.as_bytes()], // 只使用种子字符串
+        program_id,                               // 程序ID
+    );
+    Ok((pda, bump))
 }
 
 /// 获取创作者地址

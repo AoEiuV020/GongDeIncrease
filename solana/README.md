@@ -56,6 +56,12 @@ solana balance
 solana airdrop 2
 ```
 
+### 转账
+
+```bash
+solana transfer <接收地址> <金额>
+```
+
 ## 程序开发
 
 ### 构建程序
@@ -78,6 +84,12 @@ solana program deploy ./target/deploy/gong_de_increase.so
 solana confirm -v <SIGNATURE>
 ```
 
+### 更新程序
+
+直接使用首次部署完全一样的命令即可，  
+注意账户中需要有足够完整部署的资金，事后旧版的押金会退回，  
+也就是说为了开发一个押金为1sol的程序，我一共需要准备2sol的资金，  
+
 ### 测试程序
 
 ```bash
@@ -89,31 +101,6 @@ cargo test -- --no-capture
 #### 创建和增加功德
 ```bash
 cargo run --example client
-```
-
-#### 查询单个用户功德
-```bash
-cargo run --example query <用户公钥>
-```
-
-示例：
-```bash
-cargo run --example query BvpjTs88TmXJrFfghPJmo1kEJXdtqXX8SdvW6jv8ng9R
-```
-
-#### 批量查询多个用户功德
-```bash
-cargo run --example batch_query <用户公钥1> <用户公钥2> ...
-```
-
-示例：
-```bash
-cargo run --example batch_query BvpjTs88TmXJrFfghPJmo1kEJXdtqXX8SdvW6jv8ng9R 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM
-```
-
-#### 关闭功德账户并回收租金
-```bash
-cargo run --example close
 ```
 
 ### 关闭程序
@@ -226,3 +213,8 @@ PDA账户只需要用户公钥+程序ID+种子字符串就能计算出来，不�
 这个打钱是系统指令， 一旦使用就会导致打包出的程序体积暴涨， 最终是81K，对应押金 0.57033024 SOL，  
 主要是不能直接编辑账户的余额，因为没有权限，哪怕是增加都不行，  
 还有就是这个地址不能只在合约中写死，客户端调用时传递的账户列表中必须包含所有设计到的账户，  
+
+### 全局账户
+
+必须在合约中创建的PDA账户才是合约能完全掌控的，  
+而这个创建PDA账户同样是系统指令，就算没有前面加的转账功能， 这几十K的体积膨胀还是不可避免，  

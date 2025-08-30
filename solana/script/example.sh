@@ -1,1 +1,1 @@
-cargo run --example client
+cargo run --example client $1

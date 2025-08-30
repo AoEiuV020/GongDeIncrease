@@ -11,9 +11,11 @@ use solana_program::{
     entrypoint::ProgramResult, 
     msg, 
     program_error::ProgramError,
-    program::{invoke},
+    program::{invoke, invoke_signed},
     pubkey::Pubkey,
     system_instruction,
+    rent::Rent,
+    sysvar::Sysvar,
 };
 
 // 引入工具模块
@@ -23,7 +25,9 @@ use utils::{
     write_gongde_value, 
     validate_account_data_size, 
     GongDeInstruction,
-    get_creator_address,
+    derive_global_gongde_pda_address,
+    GONGDE_VALUE_SIZE,
+    GLOBAL_GONGDE_ACCOUNT_SEED,
 };
 
 // 声明这是合约的入口点 - 类似main函数
@@ -32,9 +36,9 @@ entrypoint!(process_instruction);
 // 🎯 这是合约的主入口函数，所有调用都从这里开始
 // 类比：这就像一个函数调度器，根据instruction_data决定调用哪个"函数"
 pub fn process_instruction(
-    _program_id: &Pubkey,      // 🆔 合约的唯一标识（类似类名）
-    accounts: &[AccountInfo],   // 📁 函数需要操作的数据账户（类似函数参数中的对象引用）
-    instruction_data: &[u8],   // 📋 调用指令和参数数据（类似函数名+参数的编码）
+    program_id: &Pubkey,           // 🆔 合约的唯一标识（类似类名）
+    accounts: &[AccountInfo],      // 📁 函数需要操作的数据账户（类似函数参数中的对象引用）
+    instruction_data: &[u8],       // 📋 调用指令和参数数据（类似函数名+参数的编码）
 ) -> ProgramResult {
     // 📥 从传入的账户列表中获取第一个账户（功德数据账户）
     // 类比：这就像从函数参数中取出第一个对象
@@ -70,22 +74,62 @@ pub fn process_instruction(
                 return Ok(());
             }
             
-            // 💰 创作者手续费功能 - 强制收取，不能跳过
-            let creator_address = get_creator_address()?;
+            // 💰 全局账户手续费功能 - 手续费直接转到全局PDA账户
             let fee_amount = 5000u64; // 手续费：5000 lamports（约0.000005 SOL）
             
-            // 必须提供足够的账户（用户账户、创作者账户和系统程序）
+            // 必须提供足够的账户（用户账户、全局PDA账户和系统程序）
             if accounts.len() < 4 {
                 return Err(ProgramError::NotEnoughAccountKeys);
             }
             
             let user_account = next_account_info(accounts_iter)?; // 用户账户（支付手续费）
-            let creator_account = next_account_info(accounts_iter)?; // 创作者账户（接收手续费）
+            let global_pda_account = next_account_info(accounts_iter)?; // 全局PDA功德账户（可写）
             let system_program = next_account_info(accounts_iter)?; // 系统程序
             
-            // 验证创作者账户地址必须正确
-            if creator_account.key != &creator_address {
+            // 🔍 验证全局PDA账户地址是否正确
+            let (expected_global_pda, bump) = derive_global_gongde_pda_address(program_id)?;
+            if global_pda_account.key != &expected_global_pda {
                 return Err(ProgramError::InvalidAccountData);
+            }
+            
+            // 验证全局账户可写
+            if !global_pda_account.is_writable {
+                return Err(ProgramError::InvalidAccountData);
+            }
+            
+            // 🏗️ 检查全局PDA账户是否需要初始化
+            if global_pda_account.lamports() == 0 {
+                msg!("初始化全局PDA账户");
+                
+                // 计算所需租金
+                let rent = Rent::get()?;
+                let required_lamports = rent.minimum_balance(GONGDE_VALUE_SIZE);
+                
+                // 创建PDA账户
+                let create_account_instruction = system_instruction::create_account(
+                    user_account.key,           // 付款者
+                    global_pda_account.key,     // 新账户地址
+                    required_lamports,          // 租金
+                    GONGDE_VALUE_SIZE as u64,   // 账户大小
+                    program_id,                 // 账户所有者
+                );
+                
+                // 使用PDA签名来创建账户
+                let signers_seeds = &[GLOBAL_GONGDE_ACCOUNT_SEED.as_bytes(), &[bump]];
+                invoke_signed(
+                    &create_account_instruction,
+                    &[
+                        user_account.clone(),
+                        global_pda_account.clone(),
+                        system_program.clone(),
+                    ],
+                    &[signers_seeds],
+                )?;
+                
+                // 初始化数据为0
+                let mut global_data = global_pda_account.data.borrow_mut();
+                write_gongde_value(&mut global_data, 0)?;
+                msg!("全局PDA账户初始化完成");
             }
             
             // 验证系统程序
@@ -98,10 +142,10 @@ pub fn process_instruction(
                 return Err(ProgramError::InsufficientFunds);
             }
             
-            // 使用系统程序进行转账
+            // 使用系统程序将手续费转账到全局PDA账户
             let transfer_instruction = system_instruction::transfer(
                 user_account.key,
-                creator_account.key,
+                global_pda_account.key,
                 fee_amount,
             );
             
@@ -109,12 +153,12 @@ pub fn process_instruction(
                 &transfer_instruction,
                 &[
                     user_account.clone(),
-                    creator_account.clone(),
+                    global_pda_account.clone(),
                     system_program.clone(),
                 ],
             )?;
             
-            msg!("用户支付创作者手续费: {} lamports 给 {}", fee_amount, creator_address);
+            msg!("用户支付手续费: {} lamports 到全局账户", fee_amount);
             
             // ➕ 执行增加操作
             let new_value = current + 1;
@@ -122,8 +166,25 @@ pub fn process_instruction(
             // 💾 将新值写回账户数据（使用工具函数）
             write_gongde_value(&mut data, new_value)?;
             
+            // 🌍 同时增加全局功德账户
+            // 检查全局账户数据大小
+            validate_account_data_size(global_pda_account.data_len())?;
+            
+            // 读取全局功德值
+            let mut global_data = global_pda_account.data.borrow_mut();
+            let current_global = read_gongde_value(&global_data)?;
+            
+            // 检查是否已达到最大值
+            if current_global < u32::MAX {
+                let new_global_value = current_global + 1;
+                write_gongde_value(&mut global_data, new_global_value)?;
+                msg!("全局功德: {}", new_global_value);
+            } else {
+                msg!("全局功德已圆满");
+            }
+            
             // 📢 输出日志
-            msg!("功德: {}", new_value);
+            msg!("个人功德: {}", new_value);
         }
         GongDeInstruction::Close => {
             // ️ 函数名：close() - 关闭账户并回收租金
